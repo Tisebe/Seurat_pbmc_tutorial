@@ -104,3 +104,66 @@ names(new.cluster.ids) <- levels(pbmc)
 pbmc <- RenameIdents(pbmc, new.cluster.ids)
 DimPlot(pbmc, reduction = "umap", label = TRUE, pt.size = 0.5) + NoLegend()
 
+### intgration of a new data set
+
+library(Seurat)
+library(SeuratData)
+InstallData('panc8')
+
+## constructing a new dataset by identifying new anchors
+
+data('panc8')
+
+pancreas.list <- SplitObject(panc8, split.by = 'tech')
+pancreas.list <- pancreas.list[c('celseq','celseq2','fluidigmc1','smartseq2')]
+
+## perform standard pre-processing mainly log-normalization and identification of variable features
+
+for(i in 1:length(pancreas.list)) {
+  pancreas.list[[i]] <- NormalizeData(pancreas.list[[i]], verbose = FALSE)
+  pancreas.list[[i]] <- FindVariableFeatures(pancreas.list[[i]],selection.method = 'vst',
+nfeatures=2000, verbose = FALSE)
+}
+
+for (i in 1:length(pancreas.list)) {
+  pancreas.list[[i]] <- NormalizeData(pancreas.list[[i]], verbose = FALSE)
+  pancreas.list[[i]] <- FindVariableFeatures(pancreas.list[[i]], selection.method = "vst", 
+                                             nfeatures = 2000, verbose = FALSE)
+}
+
+## integration of 3 datasets
+
+reference.list <- pancreas.list[c('celseq','celseq2','smartseq2')]
+pancreas.anchors <- FindIntegrationAnchors(object.list = reference.list, dims = 1:30)
+
+
+## pass anchors to integrate data function
+
+pancreas.integrated <- IntegrateData(anchorset = pancreas.anchors, dims = 1:30)
+
+## use integrated data for downstream analysis
+
+library(ggplot2)
+library(cowplot)
+
+## set to integrated data
+
+DefaultAssay(pancreas.integrated) <- 'integrated'
+
+
+## Running standard workflow
+
+pancreas.integrated <- ScaleData(pancreas.integrated, verbose = FALSE)
+pancreas.integrated <- RunPCA(pancreas.integrated, npcs = 30, verbose = FALSE)
+pancreas.integrated <- RunUMAP(pancreas.integrated, reduction = 'pca',dims = 1:30)
+
+
+p1 <- DimPlot(pancreas.integrated, reduction = 'umap',group.by = 'tech')
+p2 <- DimPlot(pancreas.integrated, reduction = 'umap', group.by = 'celltype',label = TRUE, repel = TRUE)+ NoLegend()
+
+plot_grid(p1,p2)
+
+
+
+
+
